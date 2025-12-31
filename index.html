@@ -239,11 +239,12 @@
         function searchByGTIN() {
             var gtin = document.getElementById('gtin-input').value.trim();
             if (!gtin) { alert('Please enter a GTIN'); return; }
-            console.log('Searching for GTIN:', gtin);
+            // Pad with leading zeros to 14 digits for exact match
+            var paddedGtin = gtin.padStart(14, '0');
+            console.log('Searching for GTIN:', gtin, '-> padded:', paddedGtin);
             performSearch({
                 recordType: 'Product',
-                filterBy: [{ fieldName: 'gtin', comparator: 'EQUALS', fieldValue: { value: gtin } }],
-                sortBy: [{ fieldName: 'name', ascending: true }],
+                filterBy: [{ fieldName: 'gtin', comparator: 'EQUALS', fieldValue: { value: paddedGtin } }],
                 desiredKeys: desiredKeys
             }, 50);
         }
@@ -255,7 +256,6 @@
             performSearch({
                 recordType: 'Product',
                 filterBy: [{ fieldName: 'name', comparator: 'BEGINS_WITH', fieldValue: { value: name } }],
-                sortBy: [{ fieldName: 'name', ascending: true }],
                 desiredKeys: desiredKeys
             }, 50);
         }
@@ -264,7 +264,6 @@
             // Debug function - fetch first 20 records without filters
             performSearch({
                 recordType: 'Product',
-                sortBy: [{ fieldName: 'name', ascending: true }],
                 desiredKeys: desiredKeys
             }, 20);
         }
