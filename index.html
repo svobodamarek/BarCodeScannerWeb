@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Product Search</title>
+    <script type="text/javascript" src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js"></script>
+    <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f7;
+        }
+        h1 { text-align: center; color: #1d1d1f; }
+        #login-section, #search-section, #results-section, #detail-section {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        #login-section { text-align: center; }
+        .hidden { display: none !important; }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: 1px solid #d2d2d7;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+        button {
+            background: #0071e3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 8px 4px 8px 0;
+        }
+        button:hover { background: #0077ed; }
+        button.secondary { background: #86868b; }
+        .result-item {
+            padding: 12px;
+            border-bottom: 1px solid #e5e5e5;
+            cursor: pointer;
+        }
+        .result-item:hover { background: #f5f5f7; }
+        .result-item:last-child { border-bottom: none; }
+        .product-name { font-weight: 600; color: #1d1d1f; }
+        .product-gtin { color: #86868b; font-size: 14px; }
+        .detail-row {
+            display: flex;
+            padding: 8px 0;
+            border-bottom: 1px solid #e5e5e5;
+        }
+        .detail-label { width: 150px; font-weight: 600; color: #86868b; }
+        .detail-value { flex: 1; color: #1d1d1f; }
+        .nutrition-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .nutrition-item {
+            background: #f5f5f7;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .nutrition-value { font-size: 24px; font-weight: 600; color: #1d1d1f; }
+        .nutrition-label { font-size: 12px; color: #86868b; }
+        #user-info { color: #86868b; }
+        .loading { text-align: center; padding: 20px; color: #86868b; }
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        #appleid-signin {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .sign-out-link {
+            color: #0071e3;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .sign-out-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <h1>Product Search</h1>
+
+    <div id="login-section">
+        <p>Sign in with your Apple ID to search products</p>
+        <div id="appleid-signin"
+             data-mode="center-align"
+             data-type="sign-in"
+             data-color="black"
+             data-border="false"
+             data-border-radius="8"
+             data-width="250"
+             data-height="44">
+        </div>
+    </div>
+
+    <div id="search-section" class="hidden">
+        <div class="header-row">
+            <div id="user-info"></div>
+            <a class="sign-out-link" onclick="signOut()">Sign Out</a>
+        </div>
+        <input type="text" id="gtin-input" placeholder="Search by GTIN (barcode)">
+        <input type="text" id="name-input" placeholder="Search by product name">
+        <button onclick="searchByGTIN()">Search GTIN</button>
+        <button onclick="searchByName()">Search Name</button>
+    </div>
+
+    <div id="results-section" class="hidden">
+        <h3>Results</h3>
+        <div id="results-list"></div>
+    </div>
+
+    <div id="detail-section" class="hidden">
+        <button class="secondary" onclick="hideDetail()">← Back to Results</button>
+        <h3 id="detail-title"></h3>
+        <div id="detail-content"></div>
+    </div>
+
+    <script>
+        const CONTAINER_ID = 'iCloud.io.code.BarCodeScanner.common';
+        const API_TOKEN = '1b808511f45736b673efd61d973092a8b67c044d880104a82295a97d9d52cd5d';
+        const REDIRECT_URI = window.location.href.split('?')[0]; // Current page without query params
+
+        let container, publicDB;
+
+        // Initialize CloudKit
+        CloudKit.configure({
+            containers: [{
+                containerIdentifier: CONTAINER_ID,
+                apiTokenAuth: {
+                    apiToken: API_TOKEN,
+                    persist: true
+                },
+                environment: 'development'
+            }]
+        });
+
+        container = CloudKit.getDefaultContainer();
+        publicDB = container.publicCloudDatabase;
+
+        // Initialize Apple Sign In
+        AppleID.auth.init({
+            clientId: CONTAINER_ID,
+            scope: 'name email',
+            redirectURI: REDIRECT_URI,
+            usePopup: true
+        });
+
+        // Listen for successful sign in
+        document.addEventListener('AppleIDSignInOnSuccess', function(event) {
+            console.log('Apple Sign In Success:', event.detail);
+            handleSignIn(event.detail);
+        });
+
+        // Listen for sign in errors
+        document.addEventListener('AppleIDSignInOnFailure', function(event) {
+            console.error('Apple Sign In Error:', event.detail.error);
+            alert('Sign in failed: ' + event.detail.error);
+        });
+
+        // Check if already signed in (from localStorage)
+        function checkExistingSession() {
+            var savedUser = localStorage.getItem('appleUser');
+            if (savedUser) {
+                try {
+                    var user = JSON.parse(savedUser);
+                    showSignedIn(user);
+                    return true;
+                } catch (e) {
+                    localStorage.removeItem('appleUser');
+                }
+            }
+            return false;
+        }
+
+        function handleSignIn(data) {
+            var user = {
+                id: data.authorization.id_token,
+                email: data.user ? data.user.email : null,
+                name: data.user ? data.user.name : null
+            };
+            localStorage.setItem('appleUser', JSON.stringify(user));
+            showSignedIn(user);
+        }
+
+        function showSignedIn(user) {
+            document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('search-section').classList.remove('hidden');
+
+            var displayName = 'Signed in';
+            if (user.name) {
+                displayName = ((user.name.firstName || '') + ' ' + (user.name.lastName || '')).trim();
+            }
+            if (!displayName || displayName === '') {
+                displayName = user.email || 'Signed in';
+            }
+            document.getElementById('user-info').textContent = displayName;
+        }
+
+        function signOut() {
+            localStorage.removeItem('appleUser');
+            document.getElementById('login-section').classList.remove('hidden');
+            document.getElementById('search-section').classList.add('hidden');
+            document.getElementById('results-section').classList.add('hidden');
+            document.getElementById('detail-section').classList.add('hidden');
+        }
+
+        // Check session on page load
+        if (!checkExistingSession()) {
+            document.getElementById('login-section').classList.remove('hidden');
+        }
+
+        function searchByGTIN() {
+            var gtin = document.getElementById('gtin-input').value.trim();
+            if (!gtin) { alert('Please enter a GTIN'); return; }
+            performSearch({
+                recordType: 'Product',
+                filterBy: [{ fieldName: 'gtin', comparator: 'EQUALS', fieldValue: { value: gtin } }]
+            });
+        }
+
+        function searchByName() {
+            var name = document.getElementById('name-input').value.trim();
+            if (!name) { alert('Please enter a product name'); return; }
+            performSearch({
+                recordType: 'Product',
+                filterBy: [{ fieldName: 'name', comparator: 'BEGINS_WITH', fieldValue: { value: name } }]
+            });
+        }
+
+        function performSearch(query) {
+            document.getElementById('results-section').classList.remove('hidden');
+            document.getElementById('detail-section').classList.add('hidden');
+            document.getElementById('results-list').innerHTML = '<div class="loading">Searching...</div>';
+
+            publicDB.performQuery(query).then(function(response) {
+                if (response.hasErrors) {
+                    document.getElementById('results-list').innerHTML =
+                        '<div class="loading">Error: ' + response.errors[0].reason + '</div>';
+                    return;
+                }
+
+                var records = response.records;
+                if (records.length === 0) {
+                    document.getElementById('results-list').innerHTML =
+                        '<div class="loading">No products found</div>';
+                    return;
+                }
+
+                var html = '';
+                for (var i = 0; i < records.length; i++) {
+                    var record = records[i];
+                    var fields = record.fields;
+                    var name = fields.name ? fields.name.value : 'Unknown';
+                    var gtin = fields.gtin ? fields.gtin.value : '';
+                    html += '<div class="result-item" data-index="' + i + '">' +
+                        '<div class="product-name">' + escapeHtml(name) + '</div>' +
+                        '<div class="product-gtin">' + escapeHtml(gtin) + '</div></div>';
+                }
+                document.getElementById('results-list').innerHTML = html;
+
+                window.searchResults = records;
+
+                var items = document.querySelectorAll('.result-item');
+                for (var j = 0; j < items.length; j++) {
+                    items[j].onclick = function() {
+                        var idx = parseInt(this.getAttribute('data-index'));
+                        showDetail(window.searchResults[idx]);
+                    };
+                }
+            });
+        }
+
+        function showDetail(record) {
+            document.getElementById('results-section').classList.add('hidden');
+            document.getElementById('detail-section').classList.remove('hidden');
+
+            var fields = record.fields;
+            var name = fields.name ? fields.name.value : 'Unknown Product';
+            document.getElementById('detail-title').textContent = name;
+
+            var html = '';
+            html += detailRow('GTIN', fields.gtin);
+            html += detailRow('Venue ID', fields.venueID);
+            html += detailRow('Country', fields.countryOfOrigin);
+            html += detailRow('Manufacturer', fields.manufacturer);
+            html += detailRow('Ingredients', fields.ingredients);
+            html += detailRow('Allergens', fields.allergens);
+            html += detailRow('Storage', fields.storageInstructions);
+
+            html += '<h4>Nutrition (per 100g)</h4><div class="nutrition-grid">';
+            html += nutritionItem(fields.energyKcal, 'Energy', 'kcal');
+            html += nutritionItem(fields.energyKJ, 'Energy', 'kJ');
+            html += nutritionItem(fields.fat, 'Fat', 'g');
+            html += nutritionItem(fields.saturatedFat, 'Sat. Fat', 'g');
+            html += nutritionItem(fields.carbohydrates, 'Carbs', 'g');
+            html += nutritionItem(fields.sugars, 'Sugars', 'g');
+            html += nutritionItem(fields.fiber, 'Fiber', 'g');
+            html += nutritionItem(fields.protein, 'Protein', 'g');
+            html += nutritionItem(fields.salt, 'Salt', 'g');
+            html += '</div>';
+
+            document.getElementById('detail-content').innerHTML = html;
+        }
+
+        function detailRow(label, field) {
+            var value = field && field.value ? field.value : '-';
+            return '<div class="detail-row"><div class="detail-label">' + label +
+                   '</div><div class="detail-value">' + escapeHtml(value) + '</div></div>';
+        }
+
+        function nutritionItem(field, label, unit) {
+            if (!field || field.value === undefined || field.value === null) return '';
+            return '<div class="nutrition-item"><div class="nutrition-value">' +
+                   field.value.toFixed(1) + '</div><div class="nutrition-label">' +
+                   label + ' (' + unit + ')</div></div>';
+        }
+
+        function hideDetail() {
+            document.getElementById('detail-section').classList.add('hidden');
+            document.getElementById('results-section').classList.remove('hidden');
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            var div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
