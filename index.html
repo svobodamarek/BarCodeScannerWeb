@@ -159,10 +159,11 @@
         publicDB = container.publicCloudDatabase;
 
         // Initialize Apple Sign In
+        const SERVICES_ID = 'io.code.BarCodeScanner.web';
         AppleID.auth.init({
-            clientId: CONTAINER_ID,
+            clientId: SERVICES_ID,
             scope: 'name email',
-            redirectURI: REDIRECT_URI,
+            redirectURI: 'https://svobodamarek.github.io/BarCodeScannerWeb/index.html',
             usePopup: true
         });
 
