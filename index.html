@@ -231,12 +231,17 @@
             document.getElementById('login-section').classList.remove('hidden');
         }
 
+        var desiredKeys = ['name', 'gtin', 'venueID', 'countryOfOrigin', 'ingredients',
+            'allergens', 'energyKJ', 'energyKcal', 'fat', 'saturatedFat', 'carbohydrates',
+            'sugars', 'fiber', 'protein', 'salt', 'storageInstructions', 'manufacturer'];
+
         function searchByGTIN() {
             var gtin = document.getElementById('gtin-input').value.trim();
             if (!gtin) { alert('Please enter a GTIN'); return; }
             performSearch({
                 recordType: 'Product',
-                filterBy: [{ fieldName: 'gtin', comparator: 'EQUALS', fieldValue: { value: gtin } }]
+                filterBy: [{ fieldName: 'gtin', comparator: 'EQUALS', fieldValue: { value: gtin } }],
+                desiredKeys: desiredKeys
             });
         }
 
@@ -245,7 +250,8 @@
             if (!name) { alert('Please enter a product name'); return; }
             performSearch({
                 recordType: 'Product',
-                filterBy: [{ fieldName: 'name', comparator: 'BEGINS_WITH', fieldValue: { value: name } }]
+                filterBy: [{ fieldName: 'name', comparator: 'BEGINS_WITH', fieldValue: { value: name } }],
+                desiredKeys: desiredKeys
             });
         }
 
