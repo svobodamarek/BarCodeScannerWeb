@@ -123,6 +123,7 @@
         <input type="text" id="name-input" placeholder="Search by product name">
         <button onclick="searchByGTIN()">Search GTIN</button>
         <button onclick="searchByName()">Search Name</button>
+        <button class="secondary" onclick="fetchAll()">Debug: Fetch All</button>
     </div>
 
     <div id="results-section" class="hidden">
@@ -238,57 +239,108 @@
         function searchByGTIN() {
             var gtin = document.getElementById('gtin-input').value.trim();
             if (!gtin) { alert('Please enter a GTIN'); return; }
+            console.log('Searching for GTIN:', gtin);
             performSearch({
                 recordType: 'Product',
                 filterBy: [{ fieldName: 'gtin', comparator: 'EQUALS', fieldValue: { value: gtin } }],
                 sortBy: [{ fieldName: 'name', ascending: true }],
                 desiredKeys: desiredKeys
-            });
+            }, 50);
         }
 
         function searchByName() {
             var name = document.getElementById('name-input').value.trim();
             if (!name) { alert('Please enter a product name'); return; }
+            console.log('Searching for name:', name);
             performSearch({
                 recordType: 'Product',
                 filterBy: [{ fieldName: 'name', comparator: 'BEGINS_WITH', fieldValue: { value: name } }],
                 sortBy: [{ fieldName: 'name', ascending: true }],
                 desiredKeys: desiredKeys
-            });
+            }, 50);
         }
 
-        function performSearch(query) {
+        function fetchAll() {
+            // Debug function - fetch first 20 records without filters
+            performSearch({
+                recordType: 'Product',
+                sortBy: [{ fieldName: 'name', ascending: true }],
+                desiredKeys: desiredKeys
+            }, 20);
+        }
+
+        var currentQuery = null;
+        var continuationMarker = null;
+
+        function performSearch(query, limit) {
+            currentQuery = query;
+            continuationMarker = null;
+            if (limit) query.resultsLimit = limit;
+
             document.getElementById('results-section').classList.remove('hidden');
             document.getElementById('detail-section').classList.add('hidden');
             document.getElementById('results-list').innerHTML = '<div class="loading">Searching...</div>';
 
+            executeQuery(query, false);
+        }
+
+        function loadMore() {
+            if (!continuationMarker || !currentQuery) return;
+            var query = Object.assign({}, currentQuery);
+            query.continuationMarker = continuationMarker;
+            executeQuery(query, true);
+        }
+
+        function executeQuery(query, append) {
             publicDB.performQuery(query).then(function(response) {
+                console.log('CloudKit response:', response);
                 if (response.hasErrors) {
+                    console.error('CloudKit errors:', response.errors);
                     document.getElementById('results-list').innerHTML =
                         '<div class="loading">Error: ' + response.errors[0].reason + '</div>';
                     return;
                 }
 
                 var records = response.records;
-                if (records.length === 0) {
+                continuationMarker = response.continuationMarker;
+
+                if (records.length === 0 && !append) {
                     document.getElementById('results-list').innerHTML =
                         '<div class="loading">No products found</div>';
                     return;
                 }
 
-                var html = '';
+                var startIndex = append ? window.searchResults.length : 0;
+                if (append) {
+                    window.searchResults = window.searchResults.concat(records);
+                } else {
+                    window.searchResults = records;
+                }
+
+                var html = append ? '' : '';
                 for (var i = 0; i < records.length; i++) {
                     var record = records[i];
                     var fields = record.fields;
                     var name = fields.name ? fields.name.value : 'Unknown';
                     var gtin = fields.gtin ? fields.gtin.value : '';
-                    html += '<div class="result-item" data-index="' + i + '">' +
+                    html += '<div class="result-item" data-index="' + (startIndex + i) + '">' +
                         '<div class="product-name">' + escapeHtml(name) + '</div>' +
                         '<div class="product-gtin">' + escapeHtml(gtin) + '</div></div>';
                 }
-                document.getElementById('results-list').innerHTML = html;
 
-                window.searchResults = records;
+                if (continuationMarker) {
+                    html += '<button class="secondary" style="width:100%;margin-top:10px" onclick="loadMore()">Load More...</button>';
+                }
+
+                if (append) {
+                    // Remove old "Load More" button and append new results
+                    var list = document.getElementById('results-list');
+                    var oldBtn = list.querySelector('button');
+                    if (oldBtn) oldBtn.remove();
+                    list.insertAdjacentHTML('beforeend', html);
+                } else {
+                    document.getElementById('results-list').innerHTML = html;
+                }
 
                 var items = document.querySelectorAll('.result-item');
                 for (var j = 0; j < items.length; j++) {
