@@ -241,6 +241,7 @@
             performSearch({
                 recordType: 'Product',
                 filterBy: [{ fieldName: 'gtin', comparator: 'EQUALS', fieldValue: { value: gtin } }],
+                sortBy: [{ fieldName: 'name', ascending: true }],
                 desiredKeys: desiredKeys
             });
         }
@@ -251,6 +252,7 @@
             performSearch({
                 recordType: 'Product',
                 filterBy: [{ fieldName: 'name', comparator: 'BEGINS_WITH', fieldValue: { value: name } }],
+                sortBy: [{ fieldName: 'name', ascending: true }],
                 desiredKeys: desiredKeys
             });
         }
