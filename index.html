@@ -242,7 +242,7 @@
             console.log('Searching for GTIN (partial):', gtin);
             performSearch({
                 recordType: 'Product',
-                filterBy: [{ fieldName: 'gtin', comparator: 'CONTAINS', fieldValue: { value: gtin } }],
+                filterBy: [{ fieldName: 'gtin', comparator: 'BEGINS_WITH', fieldValue: { value: gtin } }],
                 desiredKeys: desiredKeys
             }, 50);
         }
