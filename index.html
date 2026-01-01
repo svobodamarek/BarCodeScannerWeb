@@ -239,12 +239,10 @@
         function searchByGTIN() {
             var gtin = document.getElementById('gtin-input').value.trim();
             if (!gtin) { alert('Please enter a GTIN'); return; }
-            // Pad with leading zeros to 14 digits for exact match
-            var paddedGtin = gtin.padStart(14, '0');
-            console.log('Searching for GTIN:', gtin, '-> padded:', paddedGtin);
+            console.log('Searching for GTIN (partial):', gtin);
             performSearch({
                 recordType: 'Product',
-                filterBy: [{ fieldName: 'gtin', comparator: 'EQUALS', fieldValue: { value: paddedGtin } }],
+                filterBy: [{ fieldName: 'gtin', comparator: 'CONTAINS', fieldValue: { value: gtin } }],
                 desiredKeys: desiredKeys
             }, 50);
         }
