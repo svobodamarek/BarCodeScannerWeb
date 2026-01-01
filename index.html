@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Product Search</title>
-    <script type="text/javascript" src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js"></script>
     <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
     <style>
         * { box-sizing: border-box; }
@@ -88,42 +87,25 @@
             justify-content: center;
             margin-top: 20px;
         }
-        .sign-out-link {
-            color: #0071e3;
-            text-decoration: none;
-            cursor: pointer;
-        }
-        .sign-out-link:hover {
-            text-decoration: underline;
-        }
     </style>
 </head>
 <body>
     <h1>Product Search</h1>
 
     <div id="login-section">
-        <p>Sign in with your Apple ID to search products</p>
-        <div id="appleid-signin"
-             data-mode="center-align"
-             data-type="sign-in"
-             data-color="black"
-             data-border="false"
-             data-border-radius="8"
-             data-width="250"
-             data-height="44">
-        </div>
+        <p>Sign in with your iCloud account to search products</p>
+        <div id="apple-sign-in-button"></div>
     </div>
 
     <div id="search-section" class="hidden">
         <div class="header-row">
             <div id="user-info"></div>
-            <a class="sign-out-link" onclick="signOut()">Sign Out</a>
+            <div id="apple-sign-out-button"></div>
         </div>
         <input type="text" id="gtin-input" placeholder="Search by GTIN (barcode)">
         <input type="text" id="name-input" placeholder="Search by product name">
         <button onclick="searchByGTIN()">Search GTIN</button>
         <button onclick="searchByName()">Search Name</button>
-        <button class="secondary" onclick="fetchAll()">Debug: Fetch All</button>
     </div>
 
     <div id="results-section" class="hidden">
@@ -140,7 +122,6 @@
     <script>
         const CONTAINER_ID = 'iCloud.io.code.BarCodeScanner.common';
         const API_TOKEN = '1b808511f45736b673efd61d973092a8b67c044d880104a82295a97d9d52cd5d';
-        const REDIRECT_URI = window.location.href.split('?')[0]; // Current page without query params
 
         let container, publicDB;
 
@@ -150,7 +131,15 @@
                 containerIdentifier: CONTAINER_ID,
                 apiTokenAuth: {
                     apiToken: API_TOKEN,
-                    persist: true
+                    persist: true,
+                    signInButton: {
+                        id: 'apple-sign-in-button',
+                        theme: 'black'
+                    },
+                    signOutButton: {
+                        id: 'apple-sign-out-button',
+                        theme: 'black'
+                    }
                 },
                 environment: 'development'
             }]
@@ -159,78 +148,47 @@
         container = CloudKit.getDefaultContainer();
         publicDB = container.publicCloudDatabase;
 
-        // Initialize Apple Sign In
-        const SERVICES_ID = 'io.code.BarCodeScanner.web';
-        AppleID.auth.init({
-            clientId: SERVICES_ID,
-            scope: 'name email',
-            redirectURI: 'https://svobodamarek.github.io/BarCodeScannerWeb/index.html',
-            usePopup: true
-        });
-
-        // Listen for successful sign in
-        document.addEventListener('AppleIDSignInOnSuccess', function(event) {
-            console.log('Apple Sign In Success:', event.detail);
-            handleSignIn(event.detail);
-        });
-
-        // Listen for sign in errors
-        document.addEventListener('AppleIDSignInOnFailure', function(event) {
-            console.error('Apple Sign In Error:', event.detail.error);
-            alert('Sign in failed: ' + event.detail.error);
-        });
-
-        // Check if already signed in (from localStorage)
-        function checkExistingSession() {
-            var savedUser = localStorage.getItem('appleUser');
-            if (savedUser) {
-                try {
-                    var user = JSON.parse(savedUser);
-                    showSignedIn(user);
-                    return true;
-                } catch (e) {
-                    localStorage.removeItem('appleUser');
+        // Set up CloudKit authentication
+        function setupAuth() {
+            container.setUpAuth().then(function(userIdentity) {
+                if (userIdentity) {
+                    onSignedIn(userIdentity);
+                } else {
+                    onSignedOut();
                 }
-            }
-            return false;
+            });
         }
 
-        function handleSignIn(data) {
-            var user = {
-                id: data.authorization.id_token,
-                email: data.user ? data.user.email : null,
-                name: data.user ? data.user.name : null
-            };
-            localStorage.setItem('appleUser', JSON.stringify(user));
-            showSignedIn(user);
-        }
-
-        function showSignedIn(user) {
+        function onSignedIn(userIdentity) {
             document.getElementById('login-section').classList.add('hidden');
             document.getElementById('search-section').classList.remove('hidden');
 
             var displayName = 'Signed in';
-            if (user.name) {
-                displayName = ((user.name.firstName || '') + ' ' + (user.name.lastName || '')).trim();
+            if (userIdentity.nameComponents) {
+                var nc = userIdentity.nameComponents;
+                displayName = ((nc.givenName || '') + ' ' + (nc.familyName || '')).trim();
             }
-            if (!displayName || displayName === '') {
-                displayName = user.email || 'Signed in';
+            if (!displayName || displayName === 'Signed in') {
+                displayName = userIdentity.lookupInfo ? userIdentity.lookupInfo.emailAddress : 'Signed in';
             }
-            document.getElementById('user-info').textContent = displayName;
+            document.getElementById('user-info').textContent = displayName || 'Signed in';
         }
 
-        function signOut() {
-            localStorage.removeItem('appleUser');
+        function onSignedOut() {
             document.getElementById('login-section').classList.remove('hidden');
             document.getElementById('search-section').classList.add('hidden');
             document.getElementById('results-section').classList.add('hidden');
             document.getElementById('detail-section').classList.add('hidden');
         }
 
-        // Check session on page load
-        if (!checkExistingSession()) {
-            document.getElementById('login-section').classList.remove('hidden');
+        function signOut() {
+            container.whenUserSignsOut().then(function() {
+                onSignedOut();
+            });
         }
+
+        // Initialize auth on page load
+        setupAuth();
 
         var desiredKeys = ['name', 'gtin', 'venueID', 'countryOfOrigin', 'ingredients',
             'allergens', 'energyKJ', 'energyKcal', 'fat', 'saturatedFat', 'carbohydrates',
@@ -242,13 +200,13 @@
 
             // Pad with leading zeros to 14 digits
             var paddedGtin = gtin.padStart(14, '0');
-            console.log('Searching for GTIN (partial):', gtin, 'and padded:', paddedGtin);
+            console.log('Searching for GTIN:', gtin, '-> padded:', paddedGtin);
 
             document.getElementById('results-section').classList.remove('hidden');
             document.getElementById('detail-section').classList.add('hidden');
             document.getElementById('results-list').innerHTML = '<div class="loading">Searching...</div>';
 
-            // Run two queries: one with original input, one with padded zeros
+            // Run two parallel queries: raw input and zero-padded input
             var query1 = {
                 recordType: 'Product',
                 filterBy: [{ fieldName: 'gtin', comparator: 'BEGINS_WITH', fieldValue: { value: gtin } }],
@@ -266,51 +224,41 @@
                 publicDB.performQuery(query1),
                 publicDB.performQuery(query2)
             ]).then(function(responses) {
-                var allRecords = [];
-                var seenIds = {};
+                console.log('CloudKit GTIN responses:', responses);
 
-                responses.forEach(function(response) {
-                    if (!response.hasErrors && response.records) {
-                        response.records.forEach(function(record) {
-                            if (!seenIds[record.recordName]) {
-                                seenIds[record.recordName] = true;
-                                allRecords.push(record);
-                            }
-                        });
+                // Check for errors
+                for (var i = 0; i < responses.length; i++) {
+                    if (responses[i].hasErrors) {
+                        console.error('CloudKit errors:', responses[i].errors);
+                        document.getElementById('results-list').innerHTML =
+                            '<div class="loading">Error: ' + responses[i].errors[0].reason + '</div>';
+                        return;
                     }
-                });
+                }
 
-                window.searchResults = allRecords;
-                continuationMarker = null;
+                // Merge and deduplicate results
+                var seenIds = {};
+                var mergedRecords = [];
+                for (var r = 0; r < responses.length; r++) {
+                    var records = responses[r].records;
+                    for (var j = 0; j < records.length; j++) {
+                        var record = records[j];
+                        var recordName = record.recordName;
+                        if (!seenIds[recordName]) {
+                            seenIds[recordName] = true;
+                            mergedRecords.push(record);
+                        }
+                    }
+                }
 
-                if (allRecords.length === 0) {
-                    document.getElementById('results-list').innerHTML = '<div class="loading">No products found</div>';
+                if (mergedRecords.length === 0) {
+                    document.getElementById('results-list').innerHTML =
+                        '<div class="loading">No products found</div>';
                     return;
                 }
 
-                var html = '';
-                for (var i = 0; i < allRecords.length; i++) {
-                    var record = allRecords[i];
-                    var fields = record.fields;
-                    var name = fields.name ? fields.name.value : 'Unknown';
-                    var gtinVal = fields.gtin ? fields.gtin.value : '';
-                    html += '<div class="result-item" data-index="' + i + '">' +
-                        '<div class="product-name">' + escapeHtml(name) + '</div>' +
-                        '<div class="product-gtin">' + escapeHtml(gtinVal) + '</div></div>';
-                }
-
-                document.getElementById('results-list').innerHTML = html;
-
-                var items = document.querySelectorAll('.result-item');
-                for (var j = 0; j < items.length; j++) {
-                    items[j].onclick = function() {
-                        var idx = parseInt(this.getAttribute('data-index'));
-                        showDetail(window.searchResults[idx]);
-                    };
-                }
-            }).catch(function(error) {
-                console.error('Search error:', error);
-                document.getElementById('results-list').innerHTML = '<div class="loading">Error: ' + error.message + '</div>';
+                window.searchResults = mergedRecords;
+                displayResults(mergedRecords, false, false);
             });
         }
 
@@ -355,6 +303,42 @@
             executeQuery(query, true);
         }
 
+        function displayResults(records, append, showLoadMore) {
+            var startIndex = append ? window.searchResults.length : 0;
+
+            var html = '';
+            for (var i = 0; i < records.length; i++) {
+                var record = records[i];
+                var fields = record.fields;
+                var name = fields.name ? fields.name.value : 'Unknown';
+                var gtin = fields.gtin ? fields.gtin.value : '';
+                html += '<div class="result-item" data-index="' + (startIndex + i) + '">' +
+                    '<div class="product-name">' + escapeHtml(name) + '</div>' +
+                    '<div class="product-gtin">' + escapeHtml(gtin) + '</div></div>';
+            }
+
+            if (showLoadMore) {
+                html += '<button class="secondary" style="width:100%;margin-top:10px" onclick="loadMore()">Load More...</button>';
+            }
+
+            if (append) {
+                var list = document.getElementById('results-list');
+                var oldBtn = list.querySelector('button');
+                if (oldBtn) oldBtn.remove();
+                list.insertAdjacentHTML('beforeend', html);
+            } else {
+                document.getElementById('results-list').innerHTML = html;
+            }
+
+            var items = document.querySelectorAll('.result-item');
+            for (var j = 0; j < items.length; j++) {
+                items[j].onclick = function() {
+                    var idx = parseInt(this.getAttribute('data-index'));
+                    showDetail(window.searchResults[idx]);
+                };
+            }
+        }
+
         function executeQuery(query, append) {
             publicDB.performQuery(query).then(function(response) {
                 console.log('CloudKit response:', response);
@@ -374,45 +358,13 @@
                     return;
                 }
 
-                var startIndex = append ? window.searchResults.length : 0;
                 if (append) {
                     window.searchResults = window.searchResults.concat(records);
                 } else {
                     window.searchResults = records;
                 }
 
-                var html = append ? '' : '';
-                for (var i = 0; i < records.length; i++) {
-                    var record = records[i];
-                    var fields = record.fields;
-                    var name = fields.name ? fields.name.value : 'Unknown';
-                    var gtin = fields.gtin ? fields.gtin.value : '';
-                    html += '<div class="result-item" data-index="' + (startIndex + i) + '">' +
-                        '<div class="product-name">' + escapeHtml(name) + '</div>' +
-                        '<div class="product-gtin">' + escapeHtml(gtin) + '</div></div>';
-                }
-
-                if (continuationMarker) {
-                    html += '<button class="secondary" style="width:100%;margin-top:10px" onclick="loadMore()">Load More...</button>';
-                }
-
-                if (append) {
-                    // Remove old "Load More" button and append new results
-                    var list = document.getElementById('results-list');
-                    var oldBtn = list.querySelector('button');
-                    if (oldBtn) oldBtn.remove();
-                    list.insertAdjacentHTML('beforeend', html);
-                } else {
-                    document.getElementById('results-list').innerHTML = html;
-                }
-
-                var items = document.querySelectorAll('.result-item');
-                for (var j = 0; j < items.length; j++) {
-                    items[j].onclick = function() {
-                        var idx = parseInt(this.getAttribute('data-index'));
-                        showDetail(window.searchResults[idx]);
-                    };
-                }
+                displayResults(records, append, !!continuationMarker);
             });
         }
 
