@@ -184,12 +184,58 @@
 
         // Set up CloudKit authentication
         function setupAuth() {
+            // Check initial auth state
             container.setUpAuth().then(function(userIdentity) {
                 if (userIdentity) {
                     onSignedIn(userIdentity);
                 } else {
                     onSignedOut();
                 }
+            }).catch(function(error) {
+                console.error('Auth setup error:', error);
+                onSignedOut();
+            });
+
+            // Listen for sign-in events (fires when user successfully signs in)
+            container.whenUserSignsIn().then(function(userIdentity) {
+                console.log('User signed in:', userIdentity);
+                onSignedIn(userIdentity);
+                // Re-register the listener for next sign-in
+                registerSignInListener();
+            }).catch(function(error) {
+                console.error('Sign in error:', error);
+            });
+
+            // Listen for sign-out events (fires when user signs out)
+            container.whenUserSignsOut().then(function() {
+                console.log('User signed out');
+                onSignedOut();
+                // Re-register the listener for next sign-out
+                registerSignOutListener();
+            }).catch(function(error) {
+                console.error('Sign out error:', error);
+            });
+        }
+
+        // Re-register sign-in listener (CloudKit promises are one-shot)
+        function registerSignInListener() {
+            container.whenUserSignsIn().then(function(userIdentity) {
+                console.log('User signed in:', userIdentity);
+                onSignedIn(userIdentity);
+                registerSignInListener();
+            }).catch(function(error) {
+                console.error('Sign in error:', error);
+            });
+        }
+
+        // Re-register sign-out listener (CloudKit promises are one-shot)
+        function registerSignOutListener() {
+            container.whenUserSignsOut().then(function() {
+                console.log('User signed out');
+                onSignedOut();
+                registerSignOutListener();
+            }).catch(function(error) {
+                console.error('Sign out error:', error);
             });
         }
 
@@ -198,12 +244,12 @@
             document.getElementById('search-section').classList.remove('hidden');
 
             var displayName = 'Signed in';
-            if (userIdentity.nameComponents) {
+            if (userIdentity && userIdentity.nameComponents) {
                 var nc = userIdentity.nameComponents;
                 displayName = ((nc.givenName || '') + ' ' + (nc.familyName || '')).trim();
             }
             if (!displayName || displayName === 'Signed in') {
-                displayName = userIdentity.lookupInfo ? userIdentity.lookupInfo.emailAddress : 'Signed in';
+                displayName = (userIdentity && userIdentity.lookupInfo) ? userIdentity.lookupInfo.emailAddress : 'Signed in';
             }
             document.getElementById('user-info').textContent = displayName || 'Signed in';
         }
@@ -213,12 +259,6 @@
             document.getElementById('search-section').classList.add('hidden');
             document.getElementById('results-section').classList.add('hidden');
             document.getElementById('detail-section').classList.add('hidden');
-        }
-
-        function signOut() {
-            container.whenUserSignsOut().then(function() {
-                onSignedOut();
-            });
         }
 
         // Initialize auth on page load
