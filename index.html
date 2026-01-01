@@ -239,12 +239,79 @@
         function searchByGTIN() {
             var gtin = document.getElementById('gtin-input').value.trim();
             if (!gtin) { alert('Please enter a GTIN'); return; }
-            console.log('Searching for GTIN (partial):', gtin);
-            performSearch({
+
+            // Pad with leading zeros to 14 digits
+            var paddedGtin = gtin.padStart(14, '0');
+            console.log('Searching for GTIN (partial):', gtin, 'and padded:', paddedGtin);
+
+            document.getElementById('results-section').classList.remove('hidden');
+            document.getElementById('detail-section').classList.add('hidden');
+            document.getElementById('results-list').innerHTML = '<div class="loading">Searching...</div>';
+
+            // Run two queries: one with original input, one with padded zeros
+            var query1 = {
                 recordType: 'Product',
                 filterBy: [{ fieldName: 'gtin', comparator: 'BEGINS_WITH', fieldValue: { value: gtin } }],
-                desiredKeys: desiredKeys
-            }, 50);
+                desiredKeys: desiredKeys,
+                resultsLimit: 50
+            };
+            var query2 = {
+                recordType: 'Product',
+                filterBy: [{ fieldName: 'gtin', comparator: 'BEGINS_WITH', fieldValue: { value: paddedGtin } }],
+                desiredKeys: desiredKeys,
+                resultsLimit: 50
+            };
+
+            Promise.all([
+                publicDB.performQuery(query1),
+                publicDB.performQuery(query2)
+            ]).then(function(responses) {
+                var allRecords = [];
+                var seenIds = {};
+
+                responses.forEach(function(response) {
+                    if (!response.hasErrors && response.records) {
+                        response.records.forEach(function(record) {
+                            if (!seenIds[record.recordName]) {
+                                seenIds[record.recordName] = true;
+                                allRecords.push(record);
+                            }
+                        });
+                    }
+                });
+
+                window.searchResults = allRecords;
+                continuationMarker = null;
+
+                if (allRecords.length === 0) {
+                    document.getElementById('results-list').innerHTML = '<div class="loading">No products found</div>';
+                    return;
+                }
+
+                var html = '';
+                for (var i = 0; i < allRecords.length; i++) {
+                    var record = allRecords[i];
+                    var fields = record.fields;
+                    var name = fields.name ? fields.name.value : 'Unknown';
+                    var gtinVal = fields.gtin ? fields.gtin.value : '';
+                    html += '<div class="result-item" data-index="' + i + '">' +
+                        '<div class="product-name">' + escapeHtml(name) + '</div>' +
+                        '<div class="product-gtin">' + escapeHtml(gtinVal) + '</div></div>';
+                }
+
+                document.getElementById('results-list').innerHTML = html;
+
+                var items = document.querySelectorAll('.result-item');
+                for (var j = 0; j < items.length; j++) {
+                    items[j].onclick = function() {
+                        var idx = parseInt(this.getAttribute('data-index'));
+                        showDetail(window.searchResults[idx]);
+                    };
+                }
+            }).catch(function(error) {
+                console.error('Search error:', error);
+                document.getElementById('results-list').innerHTML = '<div class="loading">Error: ' + error.message + '</div>';
+            });
         }
 
         function searchByName() {
