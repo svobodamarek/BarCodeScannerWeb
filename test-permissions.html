@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudKit Permission Test</title>
+    <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
+    <script type="text/javascript" src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Code', monospace;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #58a6ff;
+            font-size: 24px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        h1::before {
+            content: '🔐';
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #8b949e;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .test-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        .test-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .test-title {
+            font-weight: 600;
+            color: #f0f6fc;
+        }
+        .status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status.pending { background: #30363d; color: #8b949e; }
+        .status.running { background: #1f3a5f; color: #58a6ff; animation: pulse 1.5s infinite; }
+        .status.success { background: #1a4024; color: #3fb950; }
+        .status.error { background: #4b1d1d; color: #f85149; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .test-description {
+            color: #8b949e;
+            font-size: 13px;
+            margin-bottom: 16px;
+            line-height: 1.5;
+        }
+        .result-box {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 16px;
+            font-size: 13px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .result-box.error {
+            border-color: #f85149;
+            background: #1a0d0d;
+        }
+        .result-box.success {
+            border-color: #3fb950;
+            background: #0d1a0d;
+        }
+        button {
+            background: linear-gradient(180deg, #238636 0%, #1e7c30 100%);
+            color: white;
+            border: 1px solid #2ea043;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+        button:hover {
+            background: linear-gradient(180deg, #2ea043 0%, #238636 100%);
+        }
+        button:disabled {
+            background: #21262d;
+            border-color: #30363d;
+            color: #484f58;
+            cursor: not-allowed;
+        }
+        .auth-section {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .auth-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .auth-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #f85149;
+            flex-shrink: 0;
+        }
+        .auth-dot.authenticated {
+            background: #3fb950;
+        }
+        .auth-text {
+            font-size: 14px;
+            flex: 1;
+        }
+        .auth-buttons {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 16px;
+        }
+        .alt-auth-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #30363d;
+        }
+        .alt-auth-label {
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 10px;
+        }
+        .alt-sign-in-btn {
+            background: #000;
+            color: #fff;
+            border: 1px solid #333;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+            transition: all 0.2s;
+        }
+        .alt-sign-in-btn:hover {
+            background: #1a1a1a;
+        }
+        .alt-sign-in-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .alt-sign-in-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+        .controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        .info-banner {
+            background: linear-gradient(135deg, #1f3a5f 0%, #1a1f35 100%);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        .info-banner.authenticated {
+            background: linear-gradient(135deg, #1a4024 0%, #1a2f1a 100%);
+            border-color: #2ea043;
+        }
+        .info-banner h3 {
+            color: #58a6ff;
+            font-size: 14px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .info-banner.authenticated h3 {
+            color: #3fb950;
+        }
+        .info-banner p {
+            color: #8b949e;
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        .expected {
+            color: #f0883e;
+            font-weight: 600;
+        }
+        .expected-auth {
+            color: #3fb950;
+            font-weight: 600;
+        }
+
+        /* Apple Sign In Button Styling */
+        #apple-sign-in-button {
+            display: inline-flex;
+        }
+        #apple-sign-in-button .apple-auth-button {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            min-width: 200px !important;
+            height: 40px !important;
+            padding: 0 16px !important;
+            border-radius: 6px !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif !important;
+        }
+        #apple-sign-in-button .apple-auth-button svg {
+            display: none !important;
+        }
+        #apple-sign-in-button .apple-auth-button::before {
+            content: '' !important;
+            display: inline-block;
+            width: 14px;
+            height: 17px;
+            margin-right: 6px;
+            flex-shrink: 0;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 170 170' fill='white'%3E%3Cpath d='M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.197-2.12-9.973-3.17-14.34-3.17-4.58 0-9.492 1.05-14.746 3.17-5.262 2.13-9.501 3.24-12.742 3.35-4.929.21-9.842-1.96-14.746-6.52-3.13-2.73-7.045-7.41-11.735-14.04-5.032-7.08-9.169-15.29-12.41-24.65-3.471-10.11-5.211-19.9-5.211-29.378 0-10.857 2.346-20.221 7.045-28.068 3.693-6.303 8.606-11.275 14.755-14.925s12.793-5.51 19.948-5.629c3.915 0 9.049 1.211 15.429 3.591 6.362 2.388 10.447 3.599 12.238 3.599 1.339 0 5.877-1.416 13.57-4.239 7.275-2.618 13.415-3.702 18.445-3.275 13.63 1.1 23.87 6.473 30.68 16.153-12.19 7.386-18.22 17.731-18.1 31.002.11 10.337 3.86 18.939 11.23 25.769 3.34 3.17 7.07 5.62 11.22 7.36-.9 2.61-1.85 5.11-2.86 7.51zM119.11 7.24c0 8.102-2.96 15.667-8.86 22.669-7.12 8.324-15.732 13.134-25.071 12.375a25.222 25.222 0 0 1-.188-3.07c0-7.778 3.386-16.102 9.399-22.908 3.002-3.446 6.82-6.311 11.45-8.597 4.62-2.252 8.99-3.497 13.1-3.71.12 1.083.17 2.166.17 3.24z'/%3E%3C/svg%3E");
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        #apple-sign-in-button .apple-auth-button::after {
+            content: 'Sign in with Apple' !important;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: -0.2px;
+        }
+        #apple-sign-out-button .apple-auth-button {
+            min-width: 100px !important;
+            height: 40px !important;
+            border-radius: 6px !important;
+        }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CloudKit Permission Test</h1>
+        <p class="subtitle">Testing authenticated vs unauthenticated access to your iCloud container</p>
+
+        <div class="info-banner" id="info-banner">
+            <h3 id="info-title">ℹ️ What this test does</h3>
+            <p id="info-text">
+                This page attempts to query your CloudKit public database. 
+                When <strong>not signed in</strong>, queries should return <span class="expected">0 results</span> 
+                or an <span class="expected">ACCESS_DENIED</span> error.
+                When <strong>signed in</strong>, queries should return <span class="expected-auth">actual products</span>.
+            </p>
+        </div>
+
+        <div class="auth-section">
+            <div class="auth-header">
+                <div class="auth-dot" id="auth-dot"></div>
+                <span class="auth-text" id="auth-text">Checking authentication status...</span>
+            </div>
+            <div class="auth-buttons">
+                <div id="apple-sign-in-button"></div>
+                <div id="apple-sign-out-button"></div>
+            </div>
+            <div class="alt-auth-section" id="alt-auth-section">
+                <div class="alt-auth-label">Alternative sign-in method (Apple ID JS):</div>
+                <div id="appleid-signin" data-mode="center-align" data-type="sign-in" data-color="black" data-border="false" data-border-radius="6" data-width="200" data-height="40"></div>
+                <div id="alt-auth-status" style="margin-top: 10px; font-size: 12px; color: #8b949e;"></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="run-test" onclick="runAllTests()">Run Permission Tests</button>
+            <button id="reset-tests" onclick="resetTests()" style="background: #21262d; border-color: #30363d;">Reset Tests</button>
+        </div>
+
+        <div class="test-card">
+            <div class="test-header">
+                <span class="test-title">Test 1: Query Products</span>
+                <span class="status pending" id="test1-status">Pending</span>
+            </div>
+            <p class="test-description" id="test1-desc">
+                Attempts to fetch products from the public database.
+                <br><strong>Expected:</strong> <span id="test1-expected">Should return 0 results if not authenticated.</span>
+            </p>
+            <div class="result-box" id="test1-result">Click "Run Permission Tests" to start...</div>
+        </div>
+
+        <div class="test-card">
+            <div class="test-header">
+                <span class="test-title">Test 2: Query by GTIN</span>
+                <span class="status pending" id="test2-status">Pending</span>
+            </div>
+            <p class="test-description" id="test2-desc">
+                Attempts to search for GTIN <code style="background:#21262d;padding:2px 6px;border-radius:4px;">8594026123079</code>.
+                <br><strong>Expected:</strong> <span id="test2-expected">Should return 0 results if not authenticated (this product exists).</span>
+            </p>
+            <div class="result-box" id="test2-result">Click "Run Permission Tests" to start...</div>
+        </div>
+
+        <div class="test-card">
+            <div class="test-header">
+                <span class="test-title">Test 3: Fetch Record by ID</span>
+                <span class="status pending" id="test3-status">Pending</span>
+            </div>
+            <p class="test-description">
+                Attempts to fetch record <code style="background:#21262d;padding:2px 6px;border-radius:4px;">3a46a4f5b3b81452823e645f</code> directly by ID.
+                <br><strong>Expected:</strong> <span id="test3-expected">Should fail or return nothing if not authenticated (this record exists).</span>
+            </p>
+            <div class="result-box" id="test3-result">Click "Run Permission Tests" to start...</div>
+        </div>
+    </div>
+
+    <script>
+        const CONTAINER_ID = 'iCloud.io.code.BarCodeScanner.common';
+        const API_TOKEN = '1b808511f45736b673efd61d973092a8b67c044d880104a82295a97d9d52cd5d';
+
+        let container, publicDB;
+        let isAuthenticated = false;
+
+        // Initialize CloudKit WITH sign-in buttons
+        CloudKit.configure({
+            containers: [{
+                containerIdentifier: CONTAINER_ID,
+                apiTokenAuth: {
+                    apiToken: API_TOKEN,
+                    persist: true,
+                    signInButton: {
+                        id: 'apple-sign-in-button',
+                        theme: 'black'
+                    },
+                    signOutButton: {
+                        id: 'apple-sign-out-button',
+                        theme: 'black'
+                    }
+                },
+                environment: 'development'
+            }]
+        });
+
+        container = CloudKit.getDefaultContainer();
+        publicDB = container.publicCloudDatabase;
+
+        // Set up CloudKit authentication
+        function setupAuth() {
+            container.setUpAuth().then(function(userIdentity) {
+                if (userIdentity) {
+                    onSignedIn(userIdentity);
+                } else {
+                    onSignedOut();
+                }
+            }).catch(function(error) {
+                document.getElementById('auth-text').textContent = 'Auth check failed: ' + error;
+            });
+        }
+
+        function onSignedIn(userIdentity) {
+            isAuthenticated = true;
+            const dot = document.getElementById('auth-dot');
+            const text = document.getElementById('auth-text');
+            
+            dot.classList.add('authenticated');
+            
+            let displayName = 'Authenticated User';
+            if (userIdentity.nameComponents) {
+                const nc = userIdentity.nameComponents;
+                displayName = ((nc.givenName || '') + ' ' + (nc.familyName || '')).trim();
+            }
+            if (!displayName || displayName === 'Authenticated User') {
+                displayName = userIdentity.lookupInfo ? userIdentity.lookupInfo.emailAddress : 'Authenticated User';
+            }
+            
+            text.innerHTML = '<strong>✓ Signed in as:</strong> ' + displayName;
+
+            // Update UI for authenticated state
+            updateExpectations();
+        }
+
+        function onSignedOut() {
+            isAuthenticated = false;
+            const dot = document.getElementById('auth-dot');
+            const text = document.getElementById('auth-text');
+
+            dot.classList.remove('authenticated');
+            text.innerHTML = '<strong>✗ Not signed in</strong> — Sign in with Apple to test authenticated access';
+
+            // Update UI for unauthenticated state
+            updateExpectations();
+        }
+
+        function updateExpectations() {
+            const banner = document.getElementById('info-banner');
+            const infoTitle = document.getElementById('info-title');
+            const infoText = document.getElementById('info-text');
+            
+            if (isAuthenticated) {
+                banner.classList.add('authenticated');
+                infoTitle.textContent = '✓ Testing Authenticated Access';
+                infoText.innerHTML = `
+                    You are <strong>signed in</strong>. Queries should now return <span class="expected-auth">actual products</span> 
+                    from your CloudKit database. If you still see 0 results, there may be no data or other issues.
+                `;
+                
+                document.getElementById('test1-expected').innerHTML = 'Should return <span class="expected-auth">products</span> when authenticated.';
+                document.getElementById('test2-expected').innerHTML = 'Should return the <span class="expected-auth">product</span> for GTIN 8594026123079.';
+                document.getElementById('test3-expected').innerHTML = 'Should return the <span class="expected-auth">record</span> for ID 3a46a4f5b3b81452823e645f.';
+            } else {
+                banner.classList.remove('authenticated');
+                infoTitle.textContent = 'ℹ️ Testing Unauthenticated Access';
+                infoText.innerHTML = `
+                    This page attempts to query your CloudKit public database. 
+                    When <strong>not signed in</strong>, queries should return <span class="expected">0 results</span> 
+                    or an <span class="expected">ACCESS_DENIED</span> error.
+                    When <strong>signed in</strong>, queries should return <span class="expected-auth">actual products</span>.
+                `;
+                
+                document.getElementById('test1-expected').innerHTML = 'Should return <span class="expected">0 results</span> if not authenticated.';
+                document.getElementById('test2-expected').innerHTML = 'Should return <span class="expected">0 results</span> if not authenticated (this product exists).';
+                document.getElementById('test3-expected').innerHTML = 'Should fail or return nothing if not authenticated.';
+            }
+        }
+
+        setupAuth();
+
+        // Initialize Apple Sign In JS (alternative method)
+        function initAppleSignIn() {
+            try {
+                AppleID.auth.init({
+                    clientId: 'io.code.BarCodeScanner.web', // Your Services ID
+                    scope: 'name email',
+                    redirectURI: window.location.origin + window.location.pathname,
+                    usePopup: true
+                });
+                document.getElementById('alt-auth-status').textContent = 'Apple Sign In JS initialized';
+            } catch (e) {
+                document.getElementById('alt-auth-status').textContent = 'Apple Sign In JS init error: ' + e.message;
+                console.error('Apple Sign In init error:', e);
+            }
+        }
+
+        // Listen for Apple Sign In success
+        document.addEventListener('AppleIDSignInOnSuccess', function(event) {
+            const response = event.detail;
+            console.log('Apple Sign In success:', response);
+            document.getElementById('alt-auth-status').innerHTML =
+                '<span style="color: #3fb950;">✓ Apple Sign In successful!</span><br>' +
+                'ID Token received. Note: This is separate from CloudKit auth.';
+
+            // The Apple Sign In JS gives us an ID token, but CloudKit uses its own auth
+            // Re-check CloudKit auth status
+            setupAuth();
+        });
+
+        // Listen for Apple Sign In failure
+        document.addEventListener('AppleIDSignInOnFailure', function(event) {
+            const error = event.detail.error;
+            console.error('Apple Sign In failed:', error);
+            document.getElementById('alt-auth-status').innerHTML =
+                '<span style="color: #f85149;">✗ Sign in failed: ' + error + '</span>';
+        });
+
+        // Initialize Apple Sign In when the page loads
+        if (typeof AppleID !== 'undefined') {
+            initAppleSignIn();
+        } else {
+            document.getElementById('alt-auth-status').textContent = 'Waiting for Apple Sign In JS to load...';
+            window.addEventListener('load', function() {
+                if (typeof AppleID !== 'undefined') {
+                    initAppleSignIn();
+                } else {
+                    document.getElementById('alt-auth-status').innerHTML =
+                        '<span style="color: #f0883e;">Apple Sign In JS not available</span>';
+                }
+            });
+        }
+
+        function resetTests() {
+            for (let i = 1; i <= 3; i++) {
+                document.getElementById('test' + i + '-status').className = 'status pending';
+                document.getElementById('test' + i + '-status').textContent = 'Pending';
+                document.getElementById('test' + i + '-result').className = 'result-box';
+                document.getElementById('test' + i + '-result').textContent = 'Click "Run Permission Tests" to start...';
+            }
+        }
+
+        function setTestStatus(testNum, status, message) {
+            const statusEl = document.getElementById('test' + testNum + '-status');
+            const resultEl = document.getElementById('test' + testNum + '-result');
+            
+            statusEl.className = 'status ' + status;
+            
+            if (isAuthenticated) {
+                // When authenticated: success = got data, error = blocked
+                statusEl.textContent = status === 'running' ? 'Running' : 
+                                       status === 'success' ? 'Success ✓' : 
+                                       status === 'error' ? 'Failed ✗' : 'Pending';
+            } else {
+                // When not authenticated: success = blocked, error = got data (bad)
+                statusEl.textContent = status === 'running' ? 'Running' : 
+                                       status === 'success' ? 'Blocked ✓' : 
+                                       status === 'error' ? 'Allowed ✗' : 'Pending';
+            }
+            
+            resultEl.textContent = message;
+            resultEl.className = 'result-box ' + (status === 'success' ? 'success' : status === 'error' ? 'error' : '');
+        }
+
+        async function runTest1() {
+            setTestStatus(1, 'running', 'Querying products...');
+            
+            try {
+                const response = await publicDB.performQuery({
+                    recordType: 'Product',
+                    desiredKeys: ['name', 'gtin'],
+                    resultsLimit: 5
+                });
+                
+                if (response.hasErrors) {
+                    const errorInfo = response.errors.map(e => 
+                        `Code: ${e.ckErrorCode || e.serverErrorCode}\nReason: ${e.reason}`
+                    ).join('\n\n');
+                    
+                    if (isAuthenticated) {
+                        setTestStatus(1, 'error', '❌ ERROR - Query failed while authenticated\n\n' + errorInfo);
+                        return false;
+                    } else {
+                        setTestStatus(1, 'success', '🔒 ACCESS DENIED (Expected)\n\n' + errorInfo);
+                        return true;
+                    }
+                }
+                
+                const recordCount = response.records ? response.records.length : 0;
+                
+                if (isAuthenticated) {
+                    // Authenticated: we expect results
+                    if (recordCount > 0) {
+                        const products = response.records.map(r => 
+                            '  • ' + (r.fields.name ? r.fields.name.value : 'Unknown') + 
+                            ' (' + (r.fields.gtin ? r.fields.gtin.value : 'No GTIN') + ')'
+                        ).join('\n');
+                        setTestStatus(1, 'success', '✅ SUCCESS - Retrieved ' + recordCount + ' products\n\n' + products);
+                        return true;
+                    } else {
+                        setTestStatus(1, 'error', '⚠️ No products returned while authenticated - is the database empty?');
+                        return false;
+                    }
+                } else {
+                    // Not authenticated: we expect 0 results
+                    if (recordCount === 0) {
+                        setTestStatus(1, 'success', '🔒 BLOCKED (Expected)\n\nReturned 0 records - unauthenticated access denied');
+                        return true;
+                    } else {
+                        const products = response.records.map(r => 
+                            '  • ' + (r.fields.name ? r.fields.name.value : 'Unknown')
+                        ).join('\n');
+                        setTestStatus(1, 'error', 
+                            '⚠️ QUERY SUCCEEDED - Permissions may be misconfigured!\n\n' +
+                            'Retrieved ' + recordCount + ' records without authentication.\n\n' + products
+                        );
+                        return false;
+                    }
+                }
+            } catch (error) {
+                if (isAuthenticated) {
+                    setTestStatus(1, 'error', '❌ EXCEPTION\n\n' + error.toString());
+                    return false;
+                } else {
+                    setTestStatus(1, 'success', '🔒 EXCEPTION (Expected)\n\n' + error.toString());
+                    return true;
+                }
+            }
+        }
+
+        async function runTest2() {
+            setTestStatus(2, 'running', 'Searching by GTIN 8594026123079...');
+            
+            try {
+                const response = await publicDB.performQuery({
+                    recordType: 'Product',
+                    filterBy: [{
+                        fieldName: 'gtin',
+                        comparator: 'EQUALS',
+                        fieldValue: { value: '8594026123079' }
+                    }],
+                    desiredKeys: ['name', 'gtin'],
+                    resultsLimit: 1
+                });
+                
+                if (response.hasErrors) {
+                    const errorInfo = response.errors.map(e => 
+                        `Code: ${e.ckErrorCode || e.serverErrorCode}\nReason: ${e.reason}`
+                    ).join('\n\n');
+                    
+                    if (isAuthenticated) {
+                        setTestStatus(2, 'error', '❌ ERROR - Query failed while authenticated\n\n' + errorInfo);
+                        return false;
+                    } else {
+                        setTestStatus(2, 'success', '🔒 ACCESS DENIED (Expected)\n\n' + errorInfo);
+                        return true;
+                    }
+                }
+                
+                const recordCount = response.records ? response.records.length : 0;
+                
+                if (isAuthenticated) {
+                    if (recordCount > 0) {
+                        const product = response.records[0];
+                        const productName = product.fields.name ? product.fields.name.value : 'Unknown';
+                        const productGtin = product.fields.gtin ? product.fields.gtin.value : 'Unknown';
+                        setTestStatus(2, 'success', '✅ SUCCESS - Found product\n\n  Name: ' + productName + '\n  GTIN: ' + productGtin);
+                        return true;
+                    } else {
+                        setTestStatus(2, 'error', '⚠️ No product found for GTIN 8594026123079 - is it in the database?');
+                        return false;
+                    }
+                } else {
+                    if (recordCount === 0) {
+                        setTestStatus(2, 'success', '🔒 BLOCKED (Expected)\n\nReturned 0 records for GTIN 8594026123079 - unauthenticated access denied');
+                        return true;
+                    } else {
+                        const product = response.records[0];
+                        const productName = product.fields.name ? product.fields.name.value : 'Unknown';
+                        setTestStatus(2, 'error', 
+                            '⚠️ QUERY SUCCEEDED - Permissions may be misconfigured!\n\n' +
+                            'Found: ' + productName
+                        );
+                        return false;
+                    }
+                }
+            } catch (error) {
+                if (isAuthenticated) {
+                    setTestStatus(2, 'error', '❌ EXCEPTION\n\n' + error.toString());
+                    return false;
+                } else {
+                    setTestStatus(2, 'success', '🔒 EXCEPTION (Expected)\n\n' + error.toString());
+                    return true;
+                }
+            }
+        }
+
+        async function runTest3() {
+            setTestStatus(3, 'running', 'Fetching record 3a46a4f5b3b81452823e645f...');
+            
+            try {
+                const response = await publicDB.fetchRecords(['3a46a4f5b3b81452823e645f']);
+                
+                if (response.hasErrors) {
+                    const errorInfo = response.errors.map(e => 
+                        `Code: ${e.ckErrorCode || e.serverErrorCode}\nReason: ${e.reason}`
+                    ).join('\n\n');
+                    
+                    if (isAuthenticated) {
+                        setTestStatus(3, 'error', '❌ ERROR while authenticated\n\n' + errorInfo);
+                        return false;
+                    } else {
+                        setTestStatus(3, 'success', '🔒 ACCESS DENIED (Expected)\n\n' + errorInfo);
+                        return true;
+                    }
+                }
+                
+                const recordCount = response.records ? response.records.length : 0;
+                
+                if (isAuthenticated) {
+                    // Authenticated: we expect the record
+                    if (recordCount > 0) {
+                        const record = response.records[0];
+                        const name = record.fields.name ? record.fields.name.value : 'Unknown';
+                        const gtin = record.fields.gtin ? record.fields.gtin.value : 'Unknown';
+                        setTestStatus(3, 'success', '✅ SUCCESS - Found record\n\n  Name: ' + name + '\n  GTIN: ' + gtin + '\n  ID: ' + record.recordName);
+                        return true;
+                    } else {
+                        setTestStatus(3, 'error', '⚠️ No record returned while authenticated - record may not exist');
+                        return false;
+                    }
+                } else {
+                    // Not authenticated: we expect 0 results or error
+                    if (recordCount === 0) {
+                        setTestStatus(3, 'success', '🔒 BLOCKED (Expected)\n\nReturned 0 records - unauthenticated access denied');
+                        return true;
+                    } else {
+                        const record = response.records[0];
+                        const name = record.fields.name ? record.fields.name.value : 'Unknown';
+                        setTestStatus(3, 'error', 
+                            '⚠️ FETCH SUCCEEDED - Permissions may be misconfigured!\n\n' +
+                            'Found: ' + name
+                        );
+                        return false;
+                    }
+                }
+            } catch (error) {
+                if (isAuthenticated) {
+                    setTestStatus(3, 'error', '❌ EXCEPTION\n\n' + error.toString());
+                    return false;
+                } else {
+                    setTestStatus(3, 'success', '🔒 EXCEPTION (Expected)\n\n' + error.toString());
+                    return true;
+                }
+            }
+        }
+
+        async function runAllTests() {
+            const btn = document.getElementById('run-test');
+            btn.disabled = true;
+            btn.textContent = 'Running...';
+            
+            const results = [];
+            
+            results.push(await runTest1());
+            await new Promise(r => setTimeout(r, 500));
+            
+            results.push(await runTest2());
+            await new Promise(r => setTimeout(r, 500));
+            
+            results.push(await runTest3());
+            
+            btn.disabled = false;
+            btn.textContent = 'Run Permission Tests';
+            
+            const allPassed = results.every(r => r === true);
+            if (allPassed) {
+                console.log('✅ All tests passed!');
+            } else {
+                console.warn('⚠️ Some tests failed - review results');
+            }
+        }
+    </script>
+</body>
+</html>
